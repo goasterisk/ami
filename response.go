@@ -2,6 +2,7 @@ package ami
 
 import (
 	"errors"
+	"fmt"
 	"net/textproto"
 )
 
@@ -26,4 +27,8 @@ func newResponse(data *textproto.MIMEHeader) (*Response, error) {
 	}
 
 	return response, nil
+}
+
+func (r *Response) String() string {
+	return fmt.Sprintf("[Response] Status: %s ; ActionID: %s", r.Status, r.ActionID)
 }

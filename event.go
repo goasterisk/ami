@@ -2,6 +2,7 @@ package ami
 
 import (
 	"errors"
+	"fmt"
 	"net/textproto"
 )
 
@@ -20,10 +21,15 @@ func newEvent(data *textproto.MIMEHeader) (*Event, error) {
 	event := &Event{data.Get("Event"), data.Get("ActionID"), make(map[string]string)}
 	data.Del("Event")
 	data.Del("ActionID")
+	data.Del("Privilege")
 
 	for key, value := range *data {
 		event.fields[key] = value[0]
 	}
 
 	return event, nil
+}
+
+func (e *Event) String() string {
+	return fmt.Sprintf("[Event] %s - Fields: %s", e.Event, e.fields)
 }

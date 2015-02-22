@@ -12,7 +12,10 @@ type Action struct {
 }
 
 func NewAction(action string, params map[string]string) *Action {
-	return &Action{action, "", params}
+	if "" == params["ActionID"] {
+		params["ActionID"] = "nmartin"
+	}
+	return &Action{action, params["ActionID"], params}
 }
 
 func (a *Action) String() string {
