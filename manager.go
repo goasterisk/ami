@@ -1,18 +1,18 @@
 package ami
 
 import (
-	"io"
 	"log"
 	"net"
-	"strings"
+	"net/textproto"
 )
 
 type Manager struct {
-	hostname   string
-	port       string
-	username   string
-	secret     string
-	connection net.Conn
+	hostname string
+	port     string
+	username string
+	secret   string
+
+	conn *textproto.Conn
 }
 
 func NewManager(hostname string, port string, username string, secret string) *Manager {
@@ -21,70 +21,59 @@ func NewManager(hostname string, port string, username string, secret string) *M
 }
 
 func (m *Manager) Connect() (err error) {
-	m.connection, err = net.Dial("tcp", net.JoinHostPort(m.hostname, m.port))
+	m.conn, err = textproto.Dial("tcp", net.JoinHostPort(m.hostname, m.port))
 
 	if err != nil {
 		return
-	} else {
-		log.Printf("Connection successed\n")
 	}
+	log.Printf("Connection successed\n")
 
-	// Get AMI connection headers
-	header, err := m.read()
-	if err != nil {
-		return
-	}
-	log.Printf("Headers: %v", header)
+	// Get AMI connection header + version
+	header, err := m.conn.ReadLine()
+	log.Printf("Header: %s", header)
 
 	// Send login action
 	var params = map[string]string{
-		"ActionID": "monid",
 		"Username": m.username,
 		"Secret":   m.secret,
 	}
-	m.Execute(NewAction("Login", params))
+	_, err = m.Execute(NewAction("Login", params))
 
 	return
 }
 
-func (m *Manager) Execute(action Action) (response string, err error) {
+func (m *Manager) Execute(action *Action) (response string, err error) {
 
-	request := action.Build()
-	log.Printf("%s", request)
-	_, err = m.connection.Write([]byte(request))
+	log.Printf("%s", action)
+	err = m.conn.Writer.PrintfLine("%s", action)
 	if err != nil {
 		log.Printf("Error: %s", err.Error())
 	}
 
 	// Handle response
-	response, err = m.read()
-	log.Printf("%v", response)
+	headers, err := m.conn.ReadMIMEHeader()
+	//response, err = m.readMessage()
+	log.Printf("%s", headers)
 
 	return
+}
+
+func (m *Manager) ListenForEvents(c chan *Event) {
+	go func() {
+		for {
+			response, err := m.conn.ReadMIMEHeader()
+			if err != nil {
+				break
+			}
+			event, err := newEvent(&response)
+			c <- event
+		}
+	}()
 }
 
 func (m *Manager) Disconnect() (err error) {
 
 	_, err = m.Execute(NewAction("Logoff", nil))
-	err = m.connection.Close()
-	return
-}
-
-func (m *Manager) read() (response string, err error) {
-
-	for {
-		rawPart := make([]byte, 500)
-		bytesRead, err := m.connection.Read(rawPart)
-		if bytesRead == 0 && err == io.EOF {
-			break
-		}
-
-		part := string(rawPart[:bytesRead])
-		response += part
-		if strings.HasSuffix(part, "\r\n") || err != nil {
-			break
-		}
-	}
-
+	err = m.conn.Close()
 	return
 }
